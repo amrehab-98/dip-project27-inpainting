@@ -1,0 +1,36 @@
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Local credentials and caches
+.env
+.env.*
+!.env.example
+.cache/
+
+# Datasets and downloaded archives (keep manifests in version control)
+Project/dataset/
+data/raw/
+data/processed/
+*.tar
+*.tar.gz
+*.zip
+
+# Model weights and generated experiment output
+checkpoints/
+models/
+outputs/
+runs/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Local editor / OS files
+.idea/
+Thumbs.db
+Desktop.ini
