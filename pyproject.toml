@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dip-project27-inpainting"
+version = "0.1.0"
+description = "Reproducible image subsets, masks, and OpenCV inpainting baselines"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["numpy", "opencv-python", "Pillow"]
+
+[project.scripts]
+inpainting = "inpainting.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,29 @@
+{
+  "data": {
+    "root": "../Project/dataset/val_large (1)/val_large",
+    "source": "Places365 validation download; Places2 suitability pending confirmation",
+    "seed": 42,
+    "subset_size": 2000,
+    "image_size": 512,
+    "manifest_path": "data/manifests/subset.json"
+  },
+  "masks": {
+    "seed": 123,
+    "types": [
+      "structured",
+      "random"
+    ],
+    "hole_fraction": 0.25
+  },
+  "opencv": {
+    "methods": [
+      "telea",
+      "ns"
+    ],
+    "radius": 3.0
+  },
+  "run": {
+    "image_count": 3,
+    "output_dir": "outputs"
+  }
+}
