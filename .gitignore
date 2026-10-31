@@ -6,6 +6,9 @@ __pycache__/
 .ipynb_checkpoints/
 .pytest_cache/
 
+# Local tests
+/tests/
+
 # Local credentials and caches
 .env
 .env.*
@@ -21,8 +24,8 @@ data/processed/
 *.zip
 
 # Model weights and generated experiment output
-checkpoints/
-models/
+/checkpoints/
+/models/
 outputs/
 runs/
 *.pt
@@ -34,3 +37,17 @@ runs/
 .idea/
 Thumbs.db
 Desktop.ini
+
+# Python packaging and LaTeX build artifacts
+*.egg-info/
+build/
+dist/
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.log
+*.out
+*.toc
+*.synctex.gz
