@@ -5,15 +5,36 @@ subset, generate rectangular/free-form masks, and run Telea/Navier?Stokes baseli
 
 ## Setup
 
-Run from the repository root. Only Python, NumPy, OpenCV, and Pillow are needed.
-The pinned environment was tested with Python 3.13.18.
+Run from the repository root. Python 3.13 is required (tested with 3.13.18).
+Dependencies are PyTorch/torchvision (installed by a helper script) plus the
+packages in `requirements.txt`: NumPy, OpenCV, Pillow, and the Hugging Face
+diffusion stack.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python scripts/install_torch.py
 python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
 ```
+
+`install_torch.py` must run first, because no single PyTorch wheel supports every
+GPU generation. It installs PyTorch 2.9.1 and torchvision 0.24.1, choosing the
+build from the compute capability that `nvidia-smi` reports (oldest GPU if several):
+
+| Build | GPUs |
+|---|---|
+| `cu128` | Compute capability ≥ 7.0: Volta, Turing (GTX 16 / RTX 20), and newer, including Blackwell |
+| `cu126` | Pascal (GTX 10-series) and older |
+| `cpu` | No NVIDIA GPU detected |
+
+On macOS it installs the standard PyPI build, which supports Apple MPS.
+
+The wheels are several GB. They download in resumable chunks into `.cache/wheels/`
+and are checked against SHA-256. If the download stops, rerun the script to
+continue. Options: `--variant cu128|cu126|cpu` to override detection, `--dry-run`
+to print the wheels and pip command only, and `--chunk-mb` / `--retries` to tune
+the download.
 
 ## Configuration
 
