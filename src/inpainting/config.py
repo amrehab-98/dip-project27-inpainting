@@ -1,12 +1,16 @@
-"""JSON settings for subset selection, masks, and OpenCV baselines."""
+"""Shared JSON settings with validation for the methods selected for this run."""
 
 import json
 import math
 from pathlib import Path
 
 
-def load_config(path: str | Path) -> dict:
-    """Load the shared data, mask, and baseline settings."""
+def load_config(path: str | Path, *, methods: list[str] | None = None) -> dict:
+    """Load one workflow config; validate only the selected method sections.
+
+    A method override replaces run.methods. An explicit empty list is used by
+    prepare-data, which needs shared settings but no inpainting method.
+    """
     with Path(path).open(encoding="utf-8") as handle:
         config = json.load(handle)
     data, masks, run = config["data"], config["masks"], config["run"]
@@ -30,15 +34,48 @@ def load_config(path: str | Path) -> dict:
     if not isinstance(run["output_dir"], str) or not run["output_dir"]:
         raise ValueError("run.output_dir must be a nonempty path string")
 
-    opencv = config["opencv"]
-    methods = opencv["methods"]
-    if not isinstance(methods, list) or not methods or any(
-        method not in ("telea", "ns") for method in methods
-    ) or len(set(methods)) != len(methods):
-        raise ValueError("opencv.methods must contain unique telea and/or ns entries")
-    radius = opencv["radius"]
-    if type(radius) not in (int, float) or not math.isfinite(radius) or radius <= 0:
-        raise ValueError("opencv.radius must be positive")
+    selected = run["methods"] if methods is None else methods
+    if not isinstance(selected, list) or (not selected and methods is None) or any(
+        method not in ("opencv", "diffusion") for method in selected
+    ) or len(set(selected)) != len(selected):
+        raise ValueError("run.methods must contain unique opencv and/or diffusion entries")
+    run["methods"] = selected.copy()
+
+    if "opencv" in selected:
+        opencv = config["opencv"]
+        classical = opencv["methods"]
+        if not isinstance(classical, list) or not classical or any(
+            method not in ("telea", "ns") for method in classical
+        ) or len(set(classical)) != len(classical):
+            raise ValueError("opencv.methods must contain unique telea and/or ns entries")
+        radius = opencv["radius"]
+        if type(radius) not in (int, float) or not math.isfinite(radius) or radius <= 0:
+            raise ValueError("opencv.radius must be positive")
+
+    if "diffusion" in selected:
+        diffusion = config["diffusion"]
+        if data["image_size"] % 8:
+            raise ValueError("data.image_size must be divisible by 8 for diffusion")
+        if not isinstance(diffusion["checkpoint"], str) or not diffusion["checkpoint"].strip():
+            raise ValueError("diffusion.checkpoint must name a public checkpoint")
+        revision = diffusion["revision"]
+        if not isinstance(revision, str) or len(revision) != 40 or any(
+            character not in "0123456789abcdefABCDEF" for character in revision
+        ):
+            raise ValueError("diffusion.revision must be a full 40-character hexadecimal commit")
+        seed = diffusion["generation_seed"]
+        if type(seed) is not int or seed < 0:
+            raise ValueError("diffusion.generation_seed must be a nonnegative integer")
+        steps = diffusion["inference_steps"]
+        if type(steps) is not int or steps < 1:
+            raise ValueError("diffusion.inference_steps must be a positive integer")
+        guidance = diffusion["guidance_scale"]
+        if type(guidance) not in (int, float) or not math.isfinite(guidance) or guidance <= 0:
+            raise ValueError("diffusion.guidance_scale must be positive")
+        if not isinstance(diffusion["prompt"], str):
+            raise ValueError("diffusion.prompt must be a string")
+        if not isinstance(diffusion["cache_dir"], str) or not diffusion["cache_dir"]:
+            raise ValueError("diffusion.cache_dir must be a nonempty path string")
     return config
 
 

@@ -1,4 +1,4 @@
-"""Prepare images and masks, then run the OpenCV inpainting baselines."""
+"""One M1 preparation loop for OpenCV, frozen diffusion, or both."""
 
 from datetime import datetime, timezone
 import hashlib
@@ -15,9 +15,16 @@ from .baselines.opencv import inpaint
 from .config import resolve_path
 from .data.images import load_rgb, save_image
 from .data.masks import MASK_GENERATORS, MASK_SEED_SCHEME, derive_mask_seed, make_mask
+from .models.diffusion import FrozenDiffusionInpainter
 
 
 OVERVIEW_IMAGE_LIMIT = 3
+
+
+def stable_seed(seed: int, image_id: str, purpose: str) -> int:
+    """Keep diffusion sampling independent of mask choices and image order."""
+    value = f"{seed}:{image_id}:{purpose}".encode("utf-8")
+    return int.from_bytes(hashlib.sha256(value).digest()[:4], "big")
 
 
 def select_images(manifest: dict, count: int) -> list[str]:
@@ -32,7 +39,7 @@ def select_images(manifest: dict, count: int) -> list[str]:
 
 
 def write_overviews(destination: Path, report: dict) -> list[str]:
-    """Show the first few OpenCV comparisons in one sheet per mask type."""
+    """Label saved comparison strips for a small preview, in every run mode."""
     names = []
     columns = report["comparison_panels"]
     font = ImageFont.load_default(size=17)
@@ -56,11 +63,17 @@ def write_overviews(destination: Path, report: dict) -> list[str]:
 
 def run_workflow(config: dict, config_path: Path, name: str, *,
                  image_path: str | None = None) -> Path:
-    """Prepare each image/mask once and reuse it across the OpenCV methods."""
+    """Prepare each image/mask once, then pass it to the selected methods.
+
+    Separate runs reproduce the same inputs from the shared configuration.
+    Only selecting diffusion constructs the model and imports its GPU libraries.
+    """
     if Path(name).name != name or name in {"", ".", ".."}:
         raise ValueError("--name must be a single run-folder name")
     settings = config["run"]
-    methods = config["opencv"]["methods"]
+    methods = settings["methods"]
+    if not methods or any(method not in {"opencv", "diffusion"} for method in methods):
+        raise ValueError("Select opencv, diffusion, or both")
     root = resolve_path(config_path, config["data"]["root"])
     size = config["data"]["image_size"]
     if image_path:
@@ -76,11 +89,14 @@ def run_workflow(config: dict, config_path: Path, name: str, *,
             if not source.is_relative_to(root) or not source.is_file():
                 raise ValueError(f"Image must exist inside the dataset root: {image_id}")
 
-    columns = ["original", "masked", *methods]
+    classical = config["opencv"]["methods"] if "opencv" in methods else []
+    columns = ["original", "masked", *classical]
+    if "diffusion" in methods:
+        columns.append("diffusion")
     destination = resolve_path(config_path, settings["output_dir"]) / name
     destination.mkdir(parents=True, exist_ok=False)
     report = {
-        "purpose": "M1 OpenCV baseline samples",
+        "purpose": "Small M1 preview; not a full benchmark or head training",
         "started_utc": datetime.now(timezone.utc).isoformat(),
         "config": config, "methods": methods,
         "selected_images": [image_id for image_id, _ in inputs],
@@ -92,6 +108,21 @@ def run_workflow(config: dict, config_path: Path, name: str, *,
         "cases": [],
     }
 
+    model = None
+    if "diffusion" in methods:
+        diffusion = config["diffusion"]
+        print("Loading frozen SD1.5 inpainting checkpoint...", flush=True)
+        start = time.perf_counter()
+        model = FrozenDiffusionInpainter(
+            diffusion["checkpoint"], diffusion["revision"],
+            cache_dir=resolve_path(config_path, diffusion["cache_dir"]),
+            steps=diffusion["inference_steps"], guidance_scale=diffusion["guidance_scale"],
+            prompt=diffusion["prompt"],
+        )
+        report["model_load_seconds"] = time.perf_counter() - start
+        report["trainable_backbone_parameters"] = model.trainable_parameters
+        if model.trainable_parameters:
+            raise RuntimeError("Expected zero trainable backbone parameters")
     for image_id, source in inputs:
         original = load_rgb(source, size)
         image_key = Path(image_id).stem + "-" + hashlib.sha256(image_id.encode()).hexdigest()[:8]
@@ -114,14 +145,23 @@ def run_workflow(config: dict, config_path: Path, name: str, *,
             }
             report["cases"].append(record)
             panels = [original, masked]
-            for method in methods:
+            for method in classical:
                 start = time.perf_counter()
                 prediction = inpaint(masked, mask, method, config["opencv"]["radius"])
                 record["baseline_seconds"][method] = time.perf_counter() - start
                 save_image(case_dir / f"{method}.png", prediction)
                 panels.append(prediction)
+            if model is not None:
+                diffusion_seed = stable_seed(config["diffusion"]["generation_seed"], image_id, "diffusion")
+                start = time.perf_counter()
+                prediction = model.predict(masked, mask, diffusion_seed)
+                record["diffusion_seconds"] = time.perf_counter() - start
+                record["diffusion_seed"] = diffusion_seed
+                record["safety_filtered"] = model.last_safety_filtered
+                save_image(case_dir / "diffusion.png", prediction)
+                panels.append(prediction)
             save_image(case_dir / "comparison.png", np.concatenate(panels, axis=1))
-            record["status"] = "complete"
+            record["status"] = "filtered" if record.get("safety_filtered") else "complete"
             print(f"{image_id} / {kind}: {record['status']}", flush=True)
     report["status"] = "complete"
     report["finished_utc"] = datetime.now(timezone.utc).isoformat()

@@ -1,4 +1,4 @@
-"""M1 subset preparation, mask generation, and OpenCV inpainting samples."""
+"""M1 data preparation and a shared OpenCV/diffusion inpainting workflow."""
 
 import argparse
 import json
@@ -15,12 +15,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=Path("configs/default.json"))
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("prepare-data", help="Write a seeded subset manifest; no image copies")
-    run = sub.add_parser("run", help="Run OpenCV baselines on shared images and masks")
+    run = sub.add_parser("run", help="Run OpenCV, diffusion, or both on shared images and masks")
+    run.add_argument("--methods", nargs="+", choices=("opencv", "diffusion"),
+                     help="Override run.methods in the config")
     run.add_argument("--image", help="Use one local image instead of the configured manifest preview")
     run.add_argument("--name", default="preview", help="New output folder; existing runs are preserved")
     args = parser.parse_args(argv)
     try:
-        config = load_config(args.config)
+        if args.command == "prepare-data":
+            selected = []
+        else:
+            selected = args.methods
+        config = load_config(args.config, methods=selected)
         if args.command == "prepare-data":
             data = config["data"]
             target = resolve_path(args.config, data["manifest_path"])
