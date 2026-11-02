@@ -1,6 +1,6 @@
 {
   "data": {
-    "root": "../Project/dataset/val_large (1)/val_large",
+    "root": "../Project/dataset/val_large",
     "source": "Places365 validation download; Places2 suitability pending confirmation",
     "seed": 42,
     "subset_size": 2000,
@@ -24,6 +24,18 @@
   },
   "run": {
     "image_count": 3,
-    "output_dir": "outputs"
+    "output_dir": "outputs",
+    "methods": [
+      "opencv"
+    ]
+  },
+  "diffusion": {
+    "checkpoint": "stable-diffusion-v1-5/stable-diffusion-inpainting",
+    "revision": "8a4288a76071f7280aedbdb3253bdb9e9d5d84bb",
+    "cache_dir": ".cache/huggingface/hub",
+    "inference_steps": 20,
+    "guidance_scale": 7.5,
+    "prompt": "",
+    "generation_seed": 42
   }
 }
